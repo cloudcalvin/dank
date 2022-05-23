@@ -8,7 +8,7 @@ from waflib.Scripting import autoconfigure
 from waflib.TaskGen import extension, feature, before_method, after_method, taskgen_method
 from waflib import Utils, Context, Errors, Logs
 
-NETLIST_EXT = ".js"
+NETLIST_EXT = ".cir"
 SYM_PRE = "mitll_"
 LOGFILE = "LOGFILE.log"
 
@@ -27,7 +27,6 @@ def flatten_recursive(data):
           yield from flatten_recursive(x)
   else:
       yield data
-
 
 def init(ctx):
     ctx.load('build_logs')
@@ -106,15 +105,7 @@ def configure(ctx):
   ctx.env.NETLIST_EXT = NETLIST_EXT
   ctx.env.GNET_BACKEND = "spice-sdb"
   ctx.env.GNET_BACKEND_OPTIONS = ['jsim']
-  
-  ctx.find_program('touch', var='TOUCH')
-  if not ctx.env.TOUCH:
-    ctx.fatal('could not find the program touch')
-  
-  ctx.find_program('echo', var='TOUCH')
-  if not ctx.env.TOUCH:
-    ctx.fatal('could not find the program touch')
-    
+
   try:
     ctx.find_program('gnetlist', var='NETLISTER')
   except ctx.errors.ConfigurationError:
@@ -177,91 +168,6 @@ class netlister(Task):
     except Errors.WafError as e:
       bld.fatal(e.stdout + e.stderr)
   
-  # def runnable_status(self):
-  # #   # for t in self.run_after:
-  # #   #   if not t.hasrun:
-  # #   #     return Task.ASK_LATER
-      
-  #   ret = super().runnable_status()
-  #   bld = self.generator.bld
-  #   Logs.info('nodes:       %r' % bld.node_deps[self.uid()])
-  #   Logs.info('custom data: %r' % bld.raw_deps[self.uid()])
-  #   return ret
-  
-      
-# def scan(self):
-#     """
-#     Return the dependent files (.sch) by looking in the component library folders.
-#     To inspect the scanne results use::
-
-#       $ waf clean build --zones=deps
-#     """
-#     bld = self.generator.bld
-#     found = set()
-#     missing = []
-#     for sch in self.inputs:
-#       Logs.debug(f"deps: -> scanner working with input: {str(sch)}") 
-
-#       syms = read_symbols(sch.abspath())
-#       Logs.debug(f"deps: -> scanner found syms : {str(syms)}") 
-      
-#       sources = read_sources(sch.abspath())
-#       if(len(sources)):
-#         Logs.debug(f"deps: -> scanner found sources : {str(sources)}") 
-      
-#       missing += (sources)
-#       # sym_srcs = set()
-#       for sym in syms:
-        
-#         idx=None
-#         for i, libsym in enumerate(bld.env.sym_ids):
-        
-#           if(sym == libsym):
-#             Logs.debug(f"deps: -> scanner found symbol dependency: {str(sym)}") 
-#             idx = i
-        
-#         if(idx is None):
-#           bld.fatal(f"Could not find symbol file: ({str(sym)})")
-        
-#         sym_path = bld.path.find_resource(bld.env.sym_paths[idx])
-#         # sym_srcs.update([sym_path])
-#         sym_sources = read_sources(sym_path)
-#         if(len(sym_sources) == 0):
-#           sym_sources = read_attrs(sym_path, "file")
-#         if(len(sym_sources) == 0):
-#           bld.fatal("Symbol contains no schematic (with 'source' attribute) or netlist (with 'file' attribute) entries")
-          
-#         newly_found = set()
-#         # FIXME : Add better heuristic for recursive parent sym source search here.
-#         for src in sym_sources:
-#           Logs.debug(f"deps: -> scanner looking for file : ({str(src)})") 
-          
-#           result = None
-#           path = sym_path.parent
-#           while(result is None):
-#             Logs.debug(f"deps: -> looking in : ({str(path)})") 
-#             result = path.find_node(src)
-#             if(path == bld.path):
-#               break
-#             path = path.parent
-            
-#           if(result is None):
-#             bld.fatal(f"Could not find source file : ({str(src)})")
-            
-#           newly_found.update([result])
-          
-#         if(len(newly_found)):
-#           Logs.debug(f"deps: -> scanner found sources : {str(newly_found)}") 
-#           found.update(newly_found)
-          
-#       # found += ([bld.path.find_resource(src) for src in sources])
-      
-#       # if(len(sources) != len(found)):
-#       #   bld.fatal("Could not find the sources : %s" % found - sources)
-    
-#     return (list(found), [])
-
-
   def scan(self):
     """
     Return the dependent files (.sch) by looking in the component library folders.
@@ -293,7 +199,7 @@ class netlister(Task):
           if(path == bld.path):
             break
           path = path.parent
-          
+        
         if(result is None):
           bld.fatal(f"Could not find source file : ({str(src)})")
           
@@ -329,7 +235,7 @@ def create_netlister_task(self, node):
   :rtype: :py:class:`waflib.Task.Task`
   """
   output = node.get_bld().change_ext(self.env.NETLIST_EXT)
-  task = self.create_task("netlister", node, output) #node.parent.get_bld().find_or_declare(output))
+  task = self.create_task("netlister", node, output)
   try:
     self.compiled_tasks.append(task)
   except AttributeError:
@@ -350,33 +256,12 @@ class copy_task(Task):
       Logs.info(e.stdout, e.stderr)
       bld.fatal(e.stderr)
 
-# def find_and_replace_source_line(input):
-#   with open(str(input), "r") as f:
-#     lines = map(lambda _: _.strip(), f.readlines())
-#   with open(str(input), "w") as f:
-#     for line in lines:
-#       if(line.startswith("source=")):
-#         line.replace("source", "file")
-#         line.replace(".sch", NETLIST_EXT)
-#         f.writeline(line)
-
-
 class symbol_source_to_file_task(Task):
   color   = 'BLUE'
   ext_in  = ['.sym']
   ext_out  = ['.sym']
   shell = False
-  # def copy_sym_file(self):
-  #   return self.generator.bld.cmd_and_log(f"cp {self.inputs[0].get_src()} {self.outputs[0].get_bld()}", shell=False)
 
-  # def replace_extension(self):
-  #   return self.generator.bld.cmd_and_log(f"sed -n '/source=/ s/.sch/{NETLIST_EXT}/gp' {self.outputs[0].abspath()}", shell=False)
-
-  # def rename_attribute(self):
-  #   return self.generator.bld.cmd_and_log(f"sed -n '/source=/ s/source/file/gp'  {self.outputs[0].abspath()}", shell=False)
-
-  # run_str = (copy_sym_file, replace_extension, rename_attribute)
-  
   def run(self):
     bld = self.generator.bld
     cmd = f"cat {self.inputs[0].abspath()} \
@@ -389,96 +274,6 @@ class symbol_source_to_file_task(Task):
       Logs.info(e.stdout, e.stderr)
       bld.fatal(e.stderr)
   
-  # def run(self):
-  #   bld = self.generator.bld
-  #   self.inputs[0].abspath()
-  #   cmd = f"cp {self.inputs[0].get_src()} {self.outputs[0].get_bld()} \
-  #           && sed -n '/source=/ s/.sch/{NETLIST_EXT}/gp' {self.outputs[0].abspath()} \
-  #           && sed -n '/source=/ s/source/file/gp'  {self.outputs[0].abspath()}"
-  #   try:
-  #     return bld.cmd_and_log(cmd, output=Context.STDOUT)
-  #   except Errors.WafError as e:
-  #     Logs.info(e.stdout, e.stderr)
-  #     bld.fatal(e.stderr)
-      
-  # def scan(self):
-  #   bld = self.generator.bld
-  #   found = set()
-  #   for sym in self.inputs:
-  #     sym_sources = read_sources(sym)
-  #     if(len(sym_sources) == 0):
-  #       sym_sources = read_attrs(sym, "file")
-  #     if(len(sym_sources) == 0):
-  #       bld.fatal("Symbol contains no schematic (with 'source' attribute) or netlist (with 'file' attribute) entries")
-        
-  #     newly_found = set()
-  #     # FIXME : Add better heuristic for recursive parent sym source search here.
-  #     for src in sym_sources:
-  #       Logs.debug(f"deps: -> scanner looking for file : ({str(src)})") 
-        
-  #       result = None
-  #       path = sym.parent
-  #       while(result is None):
-  #         Logs.debug(f"deps: -> looking in : ({str(path)})") 
-  #         result = path.find_node(src)
-  #         if(path == bld.path):
-  #           break
-  #         path = path.parent
-          
-  #       if(result is None):
-  #         bld.fatal(f"Could not find source file : ({str(src)})")
-          
-  #       newly_found.update([result])
-        
-  #     if(len(newly_found)):
-  #       Logs.debug(f"deps: -> scanner found sources : {str(newly_found)}") 
-  #       found.update(newly_found)
-        
-  #   return (list(found), [])
-# class find_and_replace_task(self):
-#   def run(self):
-#     bld = self.generator.bld
-#     cmd = f"sed s/\
-#       {self.inputs[0].abspath()} \
-#       {self.outputs[0].abspath()} \
-#       /g "
-#     try:
-#       return bld.cmd_and_log(cmd, output=Context.STDOUT)
-#     except Errors.WafError as e:
-#       Logs.info(e.stdout, e.stderr)
-#       bld.fatal(e.stderr)
-# @taskgen_method
-# def create_netlist_copy_task(self, node):
-#   """
-#   :param node: the file to compile
-#   :type node: :py:class:`waflib.Node.Node`
-#   :return: The task created
-#   :rtype: :py:class:`waflib.Task.Task`
-#   """
-#   output = node.get_bld().change_ext(self.env.NETLIST_EXT)
-#   task = self.create_task("copy_task", node, output) #node.parent.get_bld().find_or_declare(output))
-#   try:
-#     self.compiled_tasks.append(task)
-#   except AttributeError:
-#     self.compiled_tasks = [task]
-#   return task
-
-# @taskgen_method
-# def create_symbol_copy_task(self, node):
-#   """
-#   :param node: the file to compile
-#   :type node: :py:class:`waflib.Node.Node`
-#   :return: The task created
-#   :rtype: :py:class:`waflib.Task.Task`
-#   """
-#   output = node.get_bld().change_ext(self.env.NETLIST_EXT)
-#   task = self.create_task("copy_task", node, output) #node.parent.get_bld().find_or_declare(output))
-#   try:
-#     self.compiled_tasks.append(task)
-#   except AttributeError:
-#     self.compiled_tasks = [task]
-#   return task
-
 @extension('.sch')
 def sch_hook(self, node):
   """Binds the sch file extensions to task instances"""
@@ -495,7 +290,6 @@ def netlist_hook(self, node):
   task = self.create_task("copy_task", node, output)
   return task
 
-
 @extension(".sym")
 def symbol_hook(self, node):
   """Binds the symbol file extensions to a task instances"""
@@ -505,46 +299,20 @@ def symbol_hook(self, node):
   task = self.create_task("symbol_source_to_file_task", node, output)
   return task
 
-
 @feature("dank")
 def dummy(task):
   pass
 
-# @conf
-# def netlist(bld, *k, **kw):
-#   """
-#   Compile a netlist from a schematic file::
-
-#     def build(bld):
-#       bld.compile(source='foo.sch')
-
-#   """
-#   kw["features"] = 'dank'
-#   bld.env.DANK = True
-#   return bld(*k, **kw)
-
 @conf
-# @before_method('process_source', 'process_rule')
 def dank(self, srcs, excl, flag_extra, *k, **kw):
   self.env.DANK = True
-  
-#   # Utils.def_attrs(self, jarname='', classpath='',
-#   #   sourcepath='.', srcdir='.',
-#   #   jar_mf_attributes={}, jar_mf_classpath=[])
-  
-  # configs = [
-  #   self.path.find_resource("gschemrc"),
   
   configs = [ conf for conf in [
       self.path.find_resource("gafrc"),
       self.path.find_resource("gschemrc"),
       *self.path.ant_glob("lepton*.conf")
     ] if conf is not None]
-  # self(rule='touch ${TGT}', target='.root')
-  # self(rule='echo %s > ${TGT}' % , target="gafrc.template")
-  # self(rule='ROOT=%s envsubst < ${SRC} > ${TGT}' % self.path, 
-  #   source='gafrc.template', 
-  #   target='gafrc')
+
   for conf in configs:
     self(rule="cp ${SRC} ${TGT}", source=conf.get_src(), target=conf.get_bld(), shell=False)
     
@@ -584,7 +352,6 @@ def dank(self, srcs, excl, flag_extra, *k, **kw):
           
       for src in final_sources:
         self(source = src, shell=False, *k, **kw)
-    # return self()
 
 @autoconfigure
 def debug(bld):
