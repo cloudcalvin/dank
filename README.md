@@ -1,4 +1,4 @@
-# Dank Assistive Netlisting Kit
+# Dank Assistive Netlisting Kit (DANK)
 
 This build tool which is made using the waf meta build framework (waf.io), encapsulates my gEDA/lepton build flow for schematic capture and netlisting.
 
